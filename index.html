@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<!-- help from https://stackoverflow.com/questions/53318646/change-colour-of-each-rectangle-in-canvas and https://stackoverflow.com/questions/5127937/how-to-center-canvas-in-html5 -->
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Fill</title>
+        <script>
+            const cv = document.createElement('canvas');
+            cv.innerHTML =
+                'Your browser does not support the HTML5 canvas tag.';
+            let mouse,
+                redraw,
+                cx,
+                cells,
+                cellSize,
+                height,
+                width,
+                colorOne = '#00ff00',
+                colorTwo = '#ff0000',
+                flippedCells = 0,
+                won;
+
+            function ready() {
+                won = false;
+                cellSize = findCellSize();
+                width = ((window.innerWidth / cellSize) | 0) * cellSize;
+                height = ((window.innerHeight / cellSize) | 0) * cellSize;
+
+                cv.width = width;
+                cv.height = height;
+
+                mouse = {
+                    x: 0,
+                    y: 0,
+                    button: 0,
+                    over: false,
+                    changed: true
+                };
+
+                cx = cv.getContext('2d');
+                redraw = true;
+
+                const cellsPerRow = (width / cellSize) | 0;
+                const cellsPerCol = (height / cellSize) | 0;
+
+                const cellPos = [];
+
+                for (let y = 0; y < height; y += cellSize) {
+                    for (let x = 0; x < width; x += cellSize) {
+                        cellPos.push([x, y]);
+                    }
+                }
+
+                const cell = (
+                    x,
+                    y,
+                    w = cellSize,
+                    h = cellSize,
+                    style = colorOne
+                ) => ({
+                    x,
+                    y,
+                    w,
+                    h,
+                    style,
+                    flip() {
+                        this.style === colorOne
+                            ? ((this.style = colorTwo), flippedCells++)
+                            : ((this.style = colorOne), flippedCells--);
+                    }
+                });
+
+                cells = Object.assign(
+                    cellPos.map((cel) => cell(...cel)),
+                    {
+                        getUnder(x, y) {
+                            return this.find(
+                                (r) =>
+                                    x >= r.x &&
+                                    x < r.x + r.w &&
+                                    y >= r.y &&
+                                    y < r.y + r.h
+                            );
+                        },
+                        draw() {
+                            for (const r of this) {
+                                cx.fillStyle = r.style;
+                                cx.fillRect(r.x, r.y, r.w, r.h);
+                            }
+                        }
+                    }
+                );
+            }
+
+            function mouseEvents(e) {
+                const bounds = cv.getBoundingClientRect();
+                const x = (mouse.x = e.pageX - bounds.left - scrollX);
+                const y = (mouse.y = e.pageY - bounds.top - scrollY);
+                mouse.over =
+                    x >= 0 && x < bounds.width && y >= 0 && y < bounds.height;
+                mouse.button =
+                    e.type === 'mousedown'
+                        ? true
+                        : e.type === 'mouseup'
+                        ? false
+                        : mouse.button;
+                mouse.changed = true;
+            }
+            ['down', 'up', 'move'].forEach((name) =>
+                document.addEventListener('mouse' + name, mouseEvents)
+            );
+
+            Object.prototype.min = function () {
+                let index = -1,
+                    min = Number.MAX_VALUE;
+
+                for (n in this) {
+                    if (this[n] < min) {
+                        index = n;
+                        min = this[n];
+                    }
+                }
+
+                return index;
+            };
+
+            Object.prototype.max = function () {
+                let index = -1,
+                    max = Number.MIN_VALUE;
+
+                for (n in this) {
+                    if (this[n] > max) {
+                        index = n;
+                        max = this[n];
+                    }
+                }
+
+                return index;
+            };
+
+            function findCellSize() {
+                sizes = {};
+                for (let i = 45; i < 56; i++) {
+                    sizes[i] = Math.abs(
+                        (window.innerWidth % i) - (window.innerHeight % i)
+                    );
+                }
+                return sizes.min() | 0;
+            }
+
+            function update() {
+                let cursor = 'default';
+
+                if (mouse.changed) {
+                    if (mouse.over) {
+                        const x = mouse.x,
+                            y = mouse.y,
+                            cellUnderMouse = cells.getUnder(x, y);
+                        if (cellUnderMouse) {
+                            if (mouse.button) {
+                                cellUnderMouse.flip();
+
+                                if (x >= cellSize) {
+                                    cells.getUnder(x - cellSize, y).flip();
+                                }
+
+                                if (y >= cellSize) {
+                                    cells.getUnder(x, y - cellSize).flip();
+                                }
+
+                                if (x < width - cellSize) {
+                                    cells.getUnder(x + cellSize, y).flip();
+                                }
+
+                                if (y < height - cellSize) {
+                                    cells.getUnder(x, y + cellSize).flip();
+                                }
+
+                                mouse.button = false;
+                                redraw = true;
+                            } else {
+                                cursor = 'pointer';
+                            }
+                        }
+                    }
+                }
+
+                if (redraw) {
+                    cx.clearRect(0, 0, width, height);
+                    cells.draw();
+                    redraw = false;
+                }
+
+                cv.style.cursor = cursor;
+
+                if (flippedCells === cells.length) {
+                    win();
+                } else {
+                    requestAnimationFrame(update);
+                }
+            }
+
+            function win() {
+                won = true;
+                console.log('won');
+            }
+
+            document.addEventListener('DOMContentLoaded', function () {
+                document.body.appendChild(cv);
+
+                ready();
+                requestAnimationFrame(update);
+            });
+        </script>
+        <style>
+            * {
+                margin: 0;
+            }
+            canvas {
+                padding: 0;
+                margin: auto;
+                display: block;
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                left: 0;
+                right: 0;
+            }
+        </style>
+    </head>
+    <body></body>
+</html>
